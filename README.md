@@ -17,7 +17,7 @@ in an SDF); it generates conformers, aligns everything into one frame,
 voxelises each molecule's conformer ensemble into pharmacophore channels, and
 clusters molecules by how much their occupancy overlaps.
 
-Built on [voxorcist](https://github.com/CHANGEME/voxorcist) for atom typing
+Built on [voxorcist](https://github.com/pawulon-tpd/voxorcist) for atom typing
 and gridding.
 
 ## Quickstart

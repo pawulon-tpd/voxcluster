@@ -12,7 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "Pawel" }]
 keywords = ["cheminformatics", "conformers", "voxel", "shape-similarity", "clustering", "rdkit"]
 dependencies = [
-    "voxorcist @ git+https://github.com/CHANGEME/voxorcist.git",
+    "voxorcist @ git+https://github.com/pawulon-tpd/voxorcist.git",
     "rdkit>=2024.9",          # rdShapeAlign
     "numpy>=1.24",
     "pandas>=2.0",
@@ -24,7 +24,7 @@ app = ["gradio>=6.0", "matplotlib>=3.8"]
 dev = ["pytest>=7.4", "ruff>=0.4"]
 
 [project.urls]
-Repository = "https://github.com/CHANGEME/voxcluster"
+Repository = "https://github.com/pawulon-tpd/voxcluster"
 
 [tool.setuptools.packages.find]
 include = ["voxcluster*"]

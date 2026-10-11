@@ -1,4 +1,4 @@
-voxorcist @ git+https://github.com/CHANGEME/voxorcist.git
+voxorcist @ git+https://github.com/pawulon-tpd/voxorcist.git
 rdkit>=2024.9
 numpy>=1.24
 pandas>=2.0
