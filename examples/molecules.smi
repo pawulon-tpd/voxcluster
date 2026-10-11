@@ -1,0 +1,14 @@
+# Small demo set: three obvious shape families plus a few drugs.
+# SMILES name
+c1ccc2ccccc2c1 naphthalene
+c1ccc2cc3ccccc3cc2c1 anthracene
+NC(=N)c1ccccc1 benzamidine
+Cc1ccc(cc1)C(N)=N 4-methylbenzamidine
+CCCCCCCCCC decane
+CCCCCCCCCCCC(=O)O lauric_acid
+CCCCCCCCO octanol
+C1C2CC3CC1CC(C2)C3 adamantane
+CC1(C)C2CCC1(C)C(=O)C2 camphor
+CC(C)Cc1ccc(cc1)C(C)C(=O)O ibuprofen
+CC(=O)Oc1ccccc1C(=O)O aspirin
+Cn1cnc2c1c(=O)n(C)c(=O)n2C caffeine
