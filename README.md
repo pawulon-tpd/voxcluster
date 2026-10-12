@@ -59,6 +59,60 @@ The CLI prints a table of molecules with cluster labels and writes
    cut at a minimum similarity (default 0.5; for `shape` alone use about 0.7,
    since shape-aligned molecules always overlap substantially).
 
+## Docking with Vina
+
+Give a receptor, a box and SMILES; voxcluster docks each ligand with
+[AutoDock Vina](https://github.com/ccsb-scripps/AutoDock-Vina), keeps the
+poses, and clusters them in the receptor frame (`--align none`), so clusters
+reflect how ligands occupy the actual binding site.
+
+```bash
+pip install -e ".[docking]"   # meeko + gemmi; the vina package on Linux x86_64
+python -m voxcluster.dock examples/3ptb/pocket.pdb examples/trypsin_ligands.smi \
+    --box-ligand examples/3ptb/ligand.sdf --out results/docked.sdf
+python -m voxcluster results/docked.sdf --align none
+```
+
+- **Receptor:** PDB prepared with [Meeko](https://github.com/forlilab/Meeko)
+  (residue templates, polar hydrogens, rigid receptor; unmatched residues are
+  dropped), or a ready PDBQT.
+- **Box:** centred on a reference ligand's heavy-atom centroid
+  (`--box-ligand`, SDF/MOL/MOL2/PDB) or `--center X Y Z`; 20 Å cube by
+  default (`--size`), or `--size auto` = ligand extent + `--padding` (5 Å).
+- **Ligands:** SMILES → RDKit with H → one ETKDGv3 conformer (seed 42) →
+  Meeko PDBQT → Vina (`vina` scoring, `--exhaustiveness 8`, `--n-poses 9`,
+  fixed `--seed`). Poses come back via Meeko with `vina_score` (kcal/mol) and
+  `pose_rank` as SD properties in one SDF. `--max-delta 1` keeps only poses
+  within 1 kcal/mol of each ligand's best. Ligands that fail preparation or
+  docking are skipped with a message.
+- **App:** open "Dock into a receptor" under the inputs, upload a receptor and
+  a box ligand (or click "Load trypsin example"); the table gains
+  `vina_best`, and the shared-frame 3D view draws the pocket as grey sticks.
+
+**Vina itself.** The `vina` Python package is used when it imports; PyPI only
+has wheels for it on Linux x86_64 (it does not build on macOS arm64 without
+Boost). Otherwise voxcluster calls the official binary from the
+[releases page](https://github.com/ccsb-scripps/AutoDock-Vina/releases)
+(Apache-2.0), found via `--vina-binary`, then `$VINA_BINARY`, then `vina` on
+`PATH`, then `~/bin/vina`.
+
+**Redocking check.** Benzamidine from SMILES into the trypsin pocket of PDB
+3PTB (box on the crystal ligand, exhaustiveness 8): top pose 0.39–0.42 Å
+heavy-atom RMSD from the crystal pose (symmetry-aware, no realignment) over
+seeds 7, 42 and 123, best score −6.1 kcal/mol, about 0.7 s per ligand on an
+Apple M-series laptop with this small (10 Å) pocket. Larger receptors and
+boxes, and flexible ligands, take longer: seconds to a minute per ligand.
+
+**Limitations.**
+- Rigid receptor; waters and cofactors are whatever the PDB contains.
+- Protonation is taken from the SMILES as given: no protonation-state or
+  tautomer enumeration (benzamidines are docked as neutral amidines).
+- Vina scores rank poses; they are not binding affinities.
+- The box decides what can be found: centre it on the site of interest and
+  make it large enough for the biggest ligand.
+- Clusters use all kept poses, weighted equally; low-ranked poses widen the
+  occupancy, so consider `--max-delta`.
+
 ## Limitations
 
 - Without a protein, the shared frame comes from shape alignment, so clusters
@@ -75,4 +129,7 @@ The CLI prints a table of molecules with cluster labels and writes
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). Optional docking dependencies are used as
+external programs or libraries under their own licences: AutoDock Vina
+(Apache-2.0), Meeko (LGPL-2.1), gemmi (MPL-2.0). The 3PTB example files come
+from the RCSB PDB (public domain).

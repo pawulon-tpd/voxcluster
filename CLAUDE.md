@@ -14,6 +14,11 @@ matrix, clusters, and a Gradio app with 3D voxel views.
   average linkage on 1 - similarity.
 - ETKDG seed must be > 0: RDKit 2026.09 embeds identical conformers with seed 0.
   `tests/test_voxcluster.py::test_conformers_differ` guards this.
+- Docking (`docking.py`, `python -m voxcluster.dock`) is optional: Meeko prepares
+  receptor/ligands, Vina runs via the `vina` package if it imports (Linux x86_64
+  wheels) else the official binary (`--vina-binary`, `$VINA_BINARY`, PATH, `~/bin/vina`).
+  Docked poses share the receptor frame, so they are analysed with `align="none"`.
+- Never commit Vina binaries or PDBQT files; `tests/test_docking.py` skips without Vina.
 
 ## Conventions
 
