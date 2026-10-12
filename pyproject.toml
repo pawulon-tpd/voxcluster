@@ -21,6 +21,13 @@ dependencies = [
 
 [project.optional-dependencies]
 app = ["gradio>=6.0", "matplotlib>=3.8"]
+# Vina itself: PyPI wheels exist for Linux x86_64 only; elsewhere use the official binary
+# (https://github.com/ccsb-scripps/AutoDock-Vina/releases). meeko imports gemmi undeclared.
+docking = [
+    "meeko>=0.8",
+    "gemmi",
+    "vina>=1.2.5; platform_system == 'Linux' and platform_machine == 'x86_64'",
+]
 dev = ["pytest>=7.4", "ruff>=0.4"]
 
 [project.urls]

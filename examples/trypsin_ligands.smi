@@ -1,0 +1,9 @@
+# Small trypsin S1-pocket ligands for examples/3ptb (SMILES name).
+NC(=N)c1ccccc1 benzamidine
+NC(=N)c1ccc(N)cc1 4-aminobenzamidine
+Cc1ccc(cc1)C(N)=N 4-methylbenzamidine
+NC(=N)c1cccc(N)c1 3-aminobenzamidine
+NC(=N)c1ccc(Cl)cc1 4-chlorobenzamidine
+NC(=N)Nc1ccccc1 phenylguanidine
+NCc1ccccc1 benzylamine
+NCc1ccc(cc1)C(N)=N 4-aminomethylbenzamidine
