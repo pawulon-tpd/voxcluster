@@ -199,11 +199,12 @@ def keep_poses(mol: Chem.Mol, max_delta: float) -> Chem.Mol:
 
 def dock(receptor: str | Path, ligands: list[tuple[str, str]], box: Box,
          exhaustiveness: int = 8, n_poses: int = 9, seed: int = 42, scoring: str = "vina",
-         max_delta: float | None = None, binary: str | Path | None = None,
+         max_delta: float | None = 1.0, binary: str | Path | None = None,
          log: Callable[[str], None] = print) -> tuple[list[Molecule], list[str]]:
     """Dock ``(smiles, name)`` pairs. Returns one Molecule per docked ligand
     (``source="docking"``) and messages for ligands that were skipped; a
-    failing ligand never stops the run."""
+    failing ligand never stops the run. By default only poses within 1 kcal/mol
+    of each ligand's best are kept; ``max_delta=None`` keeps all."""
     backend(binary)  # fail early if Vina is missing
     rec = prepare_receptor(receptor)
     molecules, skipped = [], []

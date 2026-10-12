@@ -27,8 +27,9 @@ def main() -> None:
     p.add_argument("--padding", type=float, default=5.0, help="for --size auto")
     p.add_argument("--exhaustiveness", type=int, default=8)
     p.add_argument("--n-poses", type=int, default=9)
-    p.add_argument("--max-delta", type=float, default=None,
-                   help="keep only poses within this many kcal/mol of each ligand's best")
+    p.add_argument("--max-delta", type=float, default=1.0,
+                   help="keep only poses within this many kcal/mol of each ligand's best "
+                   "(default 1; a large value such as 99 keeps all)")
     p.add_argument("--scoring", choices=["vina", "vinardo"], default="vina")
     p.add_argument("--seed", type=int, default=42, help="RDKit and Vina seed, must be > 0")
     p.add_argument("--vina-binary", default=None, help="Vina executable (default: python "

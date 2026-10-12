@@ -82,9 +82,9 @@ python -m voxcluster results/docked.sdf --align none
 - **Ligands:** SMILES → RDKit with H → one ETKDGv3 conformer (seed 42) →
   Meeko PDBQT → Vina (`vina` scoring, `--exhaustiveness 8`, `--n-poses 9`,
   fixed `--seed`). Poses come back via Meeko with `vina_score` (kcal/mol) and
-  `pose_rank` as SD properties in one SDF. `--max-delta 1` keeps only poses
-  within 1 kcal/mol of each ligand's best. Ligands that fail preparation or
-  docking are skipped with a message.
+  `pose_rank` as SD properties in one SDF. By default only poses within
+  1 kcal/mol of each ligand's best are kept (`--max-delta`, e.g. 99 keeps all).
+  Ligands that fail preparation or docking are skipped with a message.
 - **App:** open "Dock into a receptor" under the inputs, upload a receptor and
   a box ligand (or click "Load trypsin example"); the table gains
   `vina_best`, and the shared-frame 3D view draws the pocket as grey sticks.
@@ -110,8 +110,9 @@ boxes, and flexible ligands, take longer: seconds to a minute per ligand.
 - Vina scores rank poses; they are not binding affinities.
 - The box decides what can be found: centre it on the site of interest and
   make it large enough for the biggest ligand.
-- Clusters use all kept poses, weighted equally; low-ranked poses widen the
-  occupancy, so consider `--max-delta`.
+- Clusters use all kept poses, weighted equally. The 1 kcal/mol default
+  drops low-ranked poses that would widen the occupancy; the cut-off still
+  affects the clusters (with all 9 poses the trypsin example splits differently).
 
 ## Limitations
 
