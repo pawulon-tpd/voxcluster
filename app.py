@@ -3,7 +3,8 @@
 Paste SMILES (3D conformers are generated with RDKit ETKDG) or upload an SDF of
 poses. The app aligns everything onto a reference molecule, voxelises each
 molecule's conformer ensemble into pharmacophore channels, clusters molecules
-by occupancy overlap, and draws the voxels in 3D.
+by occupancy overlap, and draws the voxels in 3D. With a receptor, the SMILES
+are docked with AutoDock Vina instead and the poses are compared in place.
 """
 
 import html
@@ -21,26 +22,52 @@ from voxorcist.voxelize import CHANNELS
 
 from voxcluster.analysis import CHANNEL_SETS, Analysis, analyse
 from voxcluster.conformers import from_smiles, parse_smiles, read_sdf
+from voxcluster.docking import backend, box_from_ligand, dock, pose_scores
 
-EXAMPLE = (Path(__file__).parent / "examples" / "molecules.smi").read_text()
+EXAMPLES = Path(__file__).parent / "examples"
+EXAMPLE = (EXAMPLES / "molecules.smi").read_text()
+TRYPSIN = (EXAMPLES / "trypsin_ligands.smi").read_text()
+POCKET, POCKET_LIGAND = EXAMPLES / "3ptb" / "pocket.pdb", EXAMPLES / "3ptb" / "ligand.sdf"
 VIEWER_JS = "https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js"
 AUTO = "auto (largest molecule)"
 MAX_MOLECULES = 60
+MAX_DOCKED = 20
+PROGRESS = gr.Progress()  # Gradio injects a tracker for parameters defaulting to one
 MAX_CONFS_SHOWN = 8
 COLOR_A, COLOR_B, COLOR_BOTH = "#1c7ed6", "#e8590c", "#7048e8"
-TABLE_COLUMNS = ["name", "cluster", "n_confs", "envelope_A3", "core_A3", "core_fraction",
+TABLE_COLUMNS = ["name", "cluster", "vina_best", "n_confs", "envelope_A3", "core_A3", "core_fraction",
                  "shape", "shape_tanimoto_to_ref", "smiles"]
 
 
-def load_molecules(smiles_text: str, sdf, n_confs: int, cache: dict):
-    """Molecules from the SDF if given, else from the SMILES text. Conformer
-    generation is cached per input so changing only analysis options is fast."""
-    key = (sdf, smiles_text, n_confs)
+def load_molecules(smiles_text: str, sdf, n_confs: int, docking: tuple, cache: dict,
+                   progress=None):
+    """Molecules from the SDF if given, else docked into the receptor if one
+    is given, else conformers from the SMILES text. Cached per input so
+    changing only analysis options is fast."""
+    key = (sdf, smiles_text, n_confs, docking)
     if cache.get("key") == key:
         return cache["molecules"], cache["skipped"]
     skipped = []
+    receptor, box_ligand, size, exhaustiveness, n_poses = docking
     if sdf:
         molecules = read_sdf(sdf)
+    elif receptor:
+        if not box_ligand:
+            raise gr.Error("Docking needs a box ligand (SDF/MOL2) to centre the search box.")
+        try:
+            backend()
+        except FileNotFoundError as err:
+            raise gr.Error(str(err))
+        ligands = parse_smiles(smiles_text)[:MAX_DOCKED]
+        done = []
+
+        def log(msg):
+            done.append(msg)
+            if progress is not None:
+                progress(len(done) / len(ligands), desc=msg)
+
+        molecules, skipped = dock(receptor, ligands, box_from_ligand(box_ligand, float(size)),
+                                  int(exhaustiveness), int(n_poses), log=log)
     else:
         molecules = []
         for smiles, name in parse_smiles(smiles_text)[:MAX_MOLECULES]:
@@ -71,23 +98,36 @@ def heatmap(result: Analysis):
     return fig
 
 
-def run(smiles_text, sdf, n_confs, reference, align, features, min_similarity, cache):
-    molecules, skipped = load_molecules(smiles_text, sdf, n_confs, cache)
+def run(smiles_text, sdf, n_confs, reference, align, features, min_similarity,
+        receptor, box_ligand, box_size, exhaustiveness, n_poses, cache,
+        progress=PROGRESS):
+    docking = (receptor, box_ligand, box_size, exhaustiveness, n_poses)
+    molecules, skipped = load_molecules(smiles_text, sdf, n_confs, docking, cache, progress)
     if not molecules:
         empty = gr.update(choices=[AUTO], value=AUTO)
-        return ("No valid molecules.", None, None, empty, gr.update(), gr.update(), cache)
+        msg = "No valid molecules." + ("\n\nSkipped: " + "; ".join(skipped) if skipped else "")
+        return (msg, None, None, empty, gr.update(), gr.update(), cache)
     names = [m.name for m in molecules]
     ref = names.index(reference) if reference in names else None
-    result = analyse(molecules, ref, "none" if align == "keep coordinates" else "shape",
-                     features, min_similarity)
+    docked = all(m.source == "docking" for m in molecules)
+    keep = docked or align == "keep coordinates"
+    result = analyse(molecules, ref, "none" if keep else "shape", features, min_similarity)
     cache["result"] = result
+    cache["receptor"] = Path(receptor).read_text() if docked else None
     n_clusters = len(set(result.labels))
     summary = (f"**{len(molecules)} molecules → {n_clusters} clusters** "
                f"(average linkage, similarity ≥ {min_similarity:.2f} on `{features}`). "
                f"Reference: **{names[result.reference]}**; shared box {result.frame.spec.size:g} Å.")
+    if docked:
+        summary += (f"\n\nDocked with AutoDock Vina ({int(n_poses)} poses, exhaustiveness "
+                    f"{int(exhaustiveness)}); poses kept in the receptor frame. `vina_best` is "
+                    "the best Vina score in kcal/mol (a ranking score, not an affinity).")
     if skipped:
         summary += "\n\nSkipped: " + "; ".join(skipped)
-    table = result.table[TABLE_COLUMNS].sort_values(["cluster", "name"]).round(2)
+    result.table["vina_best"] = [min(pose_scores(m.mol)) if m.source == "docking"
+                                 else float("nan") for m in molecules]
+    columns = TABLE_COLUMNS if docked else [c for c in TABLE_COLUMNS if c != "vina_best"]
+    table = result.table[columns].sort_values(["cluster", "name"]).round(2)
     pick = names[result.order[0]]
     return (summary, table, heatmap(result),
             gr.update(choices=[AUTO] + names, value=reference if reference in names else AUTO),
@@ -122,6 +162,25 @@ def conformer_js(mol: Chem.Mol, color: str) -> list[str]:
     return calls
 
 
+def pocket_js(pdb: str, frame) -> list[str]:
+    """Receptor residues with an atom inside the shared box, as thin grey
+    sticks (polar H hidden)."""
+    half = frame.spec.size / 2
+    residues: dict[str, list[str]] = {}
+    keep = set()
+    for line in pdb.splitlines():
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        res = line[17:27]
+        residues.setdefault(res, []).append(line[:66])
+        xyz = np.array([float(line[30:38]), float(line[38:46]), float(line[46:54])])
+        if (np.abs(xyz - frame.center) <= half).all():
+            keep.add(res)
+    text = "\n".join(line for res in residues if res in keep for line in residues[res])
+    return [(f"v.addModel({json.dumps(text)},'pdb').setStyle({{}},"
+             "{stick:{radius:0.07,color:'#adb5bd'}});v.setStyle({elem:'H'},{});")]
+
+
 def page(js: list[str]) -> str:
     doc = (f'<!doctype html><html><head><meta charset="utf-8"><script src="{VIEWER_JS}"></script>'
            "<style>html,body{margin:0;height:100%;background:#fff}#v{width:100%;height:100%}</style>"
@@ -147,7 +206,8 @@ def view(name_a, name_b, mode, channel, threshold, cache):
                 f"of {mol.GetNumConformers()} conformers. Darker = occupied more often.")
         return page(calls), note
     occ_a = result.occupancies[a][c] >= threshold
-    calls = conformer_js(result.aligned[a], COLOR_A)
+    calls = pocket_js(cache["receptor"], result.frame) if cache.get("receptor") else []
+    calls += conformer_js(result.aligned[a], COLOR_A)
     if name_b in result.names:
         b = result.names.index(name_b)
         occ_b = result.occupancies[b][c] >= threshold
@@ -184,6 +244,18 @@ with gr.Blocks(title="voxcluster") as demo:
                                 label="Compare on")
             min_sim = gr.Slider(0.1, 0.95, value=0.5, step=0.05,
                                 label="Cluster cut-off (min. similarity)")
+            with gr.Accordion("Dock into a receptor (AutoDock Vina, optional)", open=False):
+                gr.Markdown("With a receptor, the SMILES are docked with Vina and the poses "
+                            "are compared in the receptor frame (alignment is ignored). "
+                            f"**Slow:** seconds to a minute per ligand; at most {MAX_DOCKED} "
+                            "ligands.")
+                receptor = gr.File(label="Receptor (PDB or PDBQT)", file_types=[".pdb", ".pdbqt"])
+                box_ligand = gr.File(label="Box ligand: search box centred on it",
+                                     file_types=[".sdf", ".mol", ".mol2", ".pdb"])
+                box_size = gr.Slider(10, 40, value=20, step=2, label="Box edge (Å)")
+                exhaustiveness = gr.Slider(1, 32, value=8, step=1, label="Exhaustiveness")
+                n_poses = gr.Slider(1, 20, value=9, step=1, label="Poses per ligand")
+                trypsin = gr.Button("Load trypsin example (PDB 3PTB)", size="sm")
             go = gr.Button("Run", variant="primary")
         with gr.Column(scale=2):
             summary = gr.Markdown()
@@ -202,8 +274,11 @@ with gr.Blocks(title="voxcluster") as demo:
             view3d = gr.HTML()
             note = gr.Markdown()
 
-    go.click(run, [smiles, sdf, n_confs, reference, align, features, min_sim, cache],
+    go.click(run, [smiles, sdf, n_confs, reference, align, features, min_sim,
+                   receptor, box_ligand, box_size, exhaustiveness, n_poses, cache],
              [summary, table, plot, reference, mol_a, mol_b, cache])
+    trypsin.click(lambda: (TRYPSIN, str(POCKET), str(POCKET_LIGAND), None),
+                  outputs=[smiles, receptor, box_ligand, sdf])
     view_controls = [mol_a, mol_b, mode, channel, threshold]
     for control in view_controls:
         control.change(view, view_controls + [cache], [view3d, note])
